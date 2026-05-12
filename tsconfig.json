@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "app/components/RecordItem.jsx"  ],
+, "app/components/RecordItem.jsx", "app/api/upload/route.js", "app/api/saved-json/route.js"  ],
   "exclude": ["node_modules"]
 }

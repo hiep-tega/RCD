@@ -1,8 +1,9 @@
 "use client";
-
 import {useCallback, useEffect, useState } from "react";
 import RecordItem from "./RecordItem";
 import DetailItem from "./DetailItem";
+import "../utils/save_reponse_v1";
+
 const BASE_API = process.env.NEXT_PUBLIC_BASE_API || "/api";
 const DATA_JSON = process.env.DATA_JSON;
 const UPLOAD_DIR = process.env.UPLOAD_DIR;
@@ -24,6 +25,7 @@ let sidePanelCollapsed = false;
 let sidePanelWidth = 320;
 
 const RecordAnalyzer = () => {
+
   const [collapsed, setCollapsed] = useState(false);
   const [recordings, setRecordings] = useState([]);
   const [detailVideo, setDetailVideo] = useState(null);
@@ -39,7 +41,8 @@ const RecordAnalyzer = () => {
       resSelect.appendChild(opt);
     });
   }
-  
+
+
   const loadGame = () => {
     let url = document.getElementById('urlInput').value.trim();
     if (!url) return;
@@ -64,7 +67,6 @@ const RecordAnalyzer = () => {
       setStatus('Game loaded: ' + url + ' — Autopilot starting recording...');
       setTimeout(() => startRecording(), 500);
     }
-     
   }
   const toggleSettings = () => {
     const ov = document.getElementById('settingsOverlay');
@@ -161,7 +163,6 @@ const applyResolution = () => {
       const fd = new FormData();
       fd.append('video', blob, 'recording.webm');
       
-      // 405 fetch
       const resp = await fetch(`${BASE_API}/convert`, { method: 'POST', body: fd });
       
       const data = await resp.json();
@@ -278,7 +279,8 @@ const loadRecordings = useCallback(async () => {
   }
   
   const updateTogglePosition = () => {
-    panelToggle.style.right = collapsed ?sidePanelWidth + 'px' :'0px' ;
+    const sidePanel = document.getElementById('sidePanel');
+    panelToggle.style.right = collapsed ? sidePanel.offsetWidth + 'px' :'0px' ;
   }
   const setStatus = (msg) => { statusBar.textContent = msg; }
   
@@ -312,6 +314,7 @@ const loadRecordings = useCallback(async () => {
     });
   };
 
+
   useEffect(() => {
     const sidePanel = document.getElementById('sidePanel');
     const panelToggle = document.getElementById('panelToggle');
@@ -333,11 +336,21 @@ const loadRecordings = useCallback(async () => {
     loadRecordings();
     initResizeHandle();
     loadResolution();
-    }, []);
 
+    fetch(`${BASE_API}/watch-api`, { method: "POST" })
+      .then(r => r.json())
+      .then(data => {
+        if (!data?.success) {
+          setStatus(`Watcher error: ${data?.error || "unknown"}`);
+        }
+      })
+      .catch((e) => {
+        setStatus(`Watcher error: ${e?.message || "cannot connect to Chrome 9222"}`);
+      });
+
+    }, []);    
     return (
     <> 
-
 <div className="toolbar">
   <input type="text" id="urlInput" placeholder="Enter game URL (e.g. https://example.com/game)" spellCheck="false" />
   <button className="btn btn-load" onClick={loadGame}>Load</button>
