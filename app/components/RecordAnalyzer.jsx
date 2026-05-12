@@ -1,40 +1,45 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import {useCallback, useEffect, useState } from "react";
+import RecordItem from "./RecordItem";
+import DetailItem from "./DetailItem";
+const BASE_API = process.env.NEXT_PUBLIC_BASE_API || "/api";
+const DATA_JSON = process.env.DATA_JSON;
+const UPLOAD_DIR = process.env.UPLOAD_DIR;
 
 const PRESETS = [
-    { name: 'Desktop',  width: 1200, height: 675, type: 'desktop' },
-    { name: 'Laptop',   width: 1024, height: 576, type: 'desktop' },
-    { name: 'Popout L', width: 800,  height: 450, type: 'desktop' },
-    { name: 'Popout S', width: 400,  height: 225, type: 'desktop' },
-    { name: 'Mobile L', width: 425,  height: 812, type: 'mobile'  },
-    { name: 'Mobile M', width: 375,  height: 667, type: 'mobile'  },
-    { name: 'Mobile S', width: 320,  height: 568, type: 'mobile'  },
-  ];
-  let mediaRecorder = null, recordedChunks = [], mediaStream = null;
-  let timerInterval = null, startTime = 0, gameLoaded = false;
-  let selectedVideo = null, pollTimer = null;
-  let autopilotEnabled = false;
+  { name: 'Desktop',  width: 1200, height: 675, type: 'desktop' },
+  { name: 'Laptop',   width: 1024, height: 576, type: 'desktop' },
+  { name: 'Popout L', width: 800,  height: 450, type: 'desktop' },
+  { name: 'Popout S', width: 400,  height: 225, type: 'desktop' },
+  { name: 'Mobile L', width: 425,  height: 812, type: 'mobile'  },
+  { name: 'Mobile M', width: 375,  height: 667, type: 'mobile'  },
+  { name: 'Mobile S', width: 320,  height: 568, type: 'mobile'  },
+];
+let mediaRecorder = null, recordedChunks = [], mediaStream = null;
+let timerInterval = null, startTime = 0, gameLoaded = false;
+let selectedVideo = null, pollTimer = null;
+let autopilotEnabled = false;
+let sidePanelCollapsed = false;
+let sidePanelWidth = 320;
 
+const RecordAnalyzer = () => {
+  const [collapsed, setCollapsed] = useState(false);
+  const [recordings, setRecordings] = useState([]);
+  const [detailVideo, setDetailVideo] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  // const [status, setStatus] = useState('');
 
-  const RecordAnalyzer = () => {
-  const sidePanel = document.getElementById('sidePanel');
-  const panelToggle = document.getElementById('panelToggle');
-  let sidePanelCollapsed = false;
-  let sidePanelWidth = 320;
-  const recordBtn = document.getElementById('recordBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const recIndicator = document.getElementById('recIndicator');
-  const recTimer = document.getElementById('recTimer');
-  const gamePanel = document.getElementById('gamePanel');
-  const placeholder = document.getElementById('placeholder');
-  const statusBar = document.getElementById('statusBar');
-  const overlay = document.getElementById('overlay');
-  const overlayMsg = document.getElementById('overlayMsg');
-  const recordingsList = document.getElementById('recordingsList');
-  const detailContent = document.getElementById('detailContent');
-  const [status, setStatus] = useState('');
-
+  const loadResolution = () => {
+    PRESETS.forEach((p, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${p.name} (${p.width}\u00d7${p.height})`;
+      resSelect.appendChild(opt);
+    });
+  }
+  
   const loadGame = () => {
     let url = document.getElementById('urlInput').value.trim();
     if (!url) return;
@@ -59,37 +64,31 @@ const PRESETS = [
       setStatus('Game loaded: ' + url + ' — Autopilot starting recording...');
       setTimeout(() => startRecording(), 500);
     }
+     
   }
   const toggleSettings = () => {
     const ov = document.getElementById('settingsOverlay');
     ov.classList.toggle('active');
   }
-   const toggleSidePanel = (forceState) => {
+  const updateTimer = () => {
+   const s = Math.floor((Date.now() - startTime) / 1000);
+   recTimer.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }
+  const toggleSidePanel = (forceState) => {
     if (forceState !== undefined) sidePanelCollapsed = !forceState;
-    sidePanelCollapsed = !sidePanelCollapsed;
-    sidePanel.classList.toggle('collapsed', sidePanelCollapsed);
-    panelToggle.innerHTML = sidePanelCollapsed ? '&#9664;' : '&#9654;';
-    // Set position immediately for collapsed (0), or use stored width for expanded
-    panelToggle.style.right = sidePanelCollapsed ? '0px' : sidePanelWidth + 'px';
+    setCollapsed(prev => !prev);
+    updateTogglePosition();
   }
   
-function applyResolution() {
-  const iframe = document.getElementById('gameIframe');
+const applyResolution = () => {
+ const iframe = document.getElementById('gameIframe');
     if (!iframe) return;
-  if (!resSelect.current) return;
-
-  const selected = resSelect.current.value;
-
-  const p = PRESETS.find(x => x.name === selected);
-
-  if (!p) {
-    console.error('Preset not found:', selected);
-    return;
-  }
-
-  iframe.style.width = `${p.width}px`;
-  iframe.style.height = `${p.height}px`;
+    const p = PRESETS[resSelect.value];
+    iframe.style.width = p.width + 'px';
+    iframe.style.height = p.height + 'px';
+    
 }
+
    const startRecording = async () => {
     try {
       const opts = {
@@ -138,13 +137,13 @@ function applyResolution() {
       setStatus(err.name === 'NotAllowedError' ? 'Recording cancelled.' : 'Error: ' + err.message);
     }
   }
-  
   const stopRecording = () => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
   }
-
+  
   const onRecordingStopped = async () => {
+    console.log('Recording stopped, chunks:', recordedChunks);
     clearInterval(timerInterval);
     recIndicator.classList.remove('active');
     recTimer.textContent = '00:00';
@@ -162,9 +161,9 @@ function applyResolution() {
       const fd = new FormData();
       fd.append('video', blob, 'recording.webm');
       
-      // 404 fetch
-      const resp = await fetch('/convert', { method: 'POST', body: fd });
-
+      // 405 fetch
+      const resp = await fetch(`${BASE_API}/convert`, { method: 'POST', body: fd });
+      
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Conversion failed');
       setStatus(`Saved: ${data.filename} - AI analyzing...`);
@@ -175,6 +174,34 @@ function applyResolution() {
       overlay.classList.remove('active');
     }
   };
+  
+const loadRecordings = useCallback(async () => {
+  try {
+    const resp = await fetch(`${BASE_API}/recordings`);
+    const items = await resp.json();
+
+    setRecordings(items);
+
+    if (items.some(v => v.status === "analyzing") && !pollTimer) {
+      pollTimer = setInterval(loadRecordings, 3000);
+    } else if (!items.some(v => v.status === "analyzing") && pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+
+      if (selectedVideo) showDetail(selectedVideo);
+    }
+    return 
+  } catch (e) {}
+}, []);
+    const selectVideo = async (filename) => {
+    selectedVideo = filename;
+    document.querySelectorAll('.rec-item').forEach(el => {
+      const titleEl = el.querySelector('.rec-title');
+      el.classList.toggle('selected', titleEl && titleEl.title === filename);
+    });
+    switchTab('detail');
+    await showDetail(filename);
+  }
     const switchTab = (tab) => {
     document.querySelectorAll('.side-tab').forEach((t, i) => {
       t.classList.toggle('active', (tab === 'list' && i === 0) || (tab === 'detail' && i === 1));
@@ -184,15 +211,130 @@ function applyResolution() {
     // Auto-expand if collapsed
     if (sidePanelCollapsed) toggleSidePanel(true);
   }
+  const deleteRecording = async (filename) => {
+    if (!confirm('Delete ' + filename + '?')) return;
+    try {
+      const resp = await fetch(`${BASE_API}/video/` + encodeURIComponent(filename), { method: 'DELETE' });
+      if (!resp.ok) { const d = await resp.json(); throw new Error(d.error); }
+      if (selectedVideo === filename) {
+        selectedVideo = null;
+        setDetailVideo(null);
+        setDetailError("");
+        setDetailLoading(false);
+      }
+      setStatus('Deleted: ' + filename);
+      loadRecordings();
+    } catch (err) {
+      setStatus('Error: ' + err.message);
+    }
+  }
+  const renameRecording = async (filename) => {
+    const baseName = filename.replace(/\.webm$/i, '');
+    const newBase = prompt('Rename recording:', baseName);
+    if (!newBase || newBase === baseName) return;
+    const newName = newBase.endsWith('.webm') ? newBase : newBase + '.webm';
+    try {
+      const resp = await fetch(`${BASE_API}/video/` + encodeURIComponent(filename), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newName }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Rename failed');
+      if (selectedVideo === filename) selectedVideo = data.filename;
+      setStatus('Renamed to: ' + data.filename);
+      loadRecordings();
+      if (selectedVideo === data.filename) showDetail(data.filename);
+    } catch (err) {
+      setStatus('Error: ' + err.message);
+    }
+  }
   
+  const showDetail = async (filename) => {
+    setDetailLoading(true);
+    setDetailError("");
+    try {
+      const infoResp = await fetch(`${BASE_API}/video/` + encodeURIComponent(filename));
+      if (!infoResp.ok) {
+        const errData = await infoResp.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to load video detail');
+      }
+
+      const info = await infoResp.json();
+      setDetailVideo(info.video || null);
+    } catch (err) {
+      setDetailVideo(null);
+      setDetailError(err.message || "Failed to load video detail");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  const handlePost = async (e) => {
+    if (e.data?.type === 'recording_saved') {
+      setStatus(`Saved: ${e.data.filename} - AI analyzing...`);
+      loadRecordings();
+    }
+  }
   
   const updateTogglePosition = () => {
-    panelToggle.style.right = sidePanelCollapsed ? '0px' : sidePanelWidth + 'px';
+    panelToggle.style.right = collapsed ?sidePanelWidth + 'px' :'0px' ;
   }
-  // updateTogglePosition();
-  const settings = useEffect(() => {
+  const setStatus = (msg) => { statusBar.textContent = msg; }
+  
+  const escapeHtml = (text) => {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+  }
+  
+  const initResizeHandle = () => {
+    const handle = document.getElementById('resizeHandle');
+    let dragging = false, startX, startW;
+    handle.addEventListener('mousedown', e => {
+      dragging = true; startX = e.clientX; startW = sidePanel.offsetWidth;
+      handle.classList.add('active');
+      sidePanel.style.transition = 'none';
+      panelToggle.style.transition = 'none';
+      document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const newW = startW - (e.clientX - startX);
+      if (newW >= 200 && newW <= 600) { sidePanel.style.width = newW + 'px'; sidePanelWidth = newW; updateTogglePosition(); }
+    });
+    document.addEventListener('mouseup', () => {
+      if (dragging) {
+        dragging = false; handle.classList.remove('active');
+        sidePanel.style.transition = '';
+        panelToggle.style.transition = '';
+        document.body.style.cursor = ''; document.body.style.userSelect = '';
+      }
+    });
+  };
+
+  useEffect(() => {
+    const sidePanel = document.getElementById('sidePanel');
+    const panelToggle = document.getElementById('panelToggle');
+    
+    const recordBtn = document.getElementById('recordBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const recIndicator = document.getElementById('recIndicator');
+    const recTimer = document.getElementById('recTimer');
+    const gamePanel = document.getElementById('gamePanel');
+    const placeholder = document.getElementById('placeholder');
+    const statusBar = document.getElementById('statusBar');
+    const overlay = document.getElementById('overlay');
+    const overlayMsg = document.getElementById('overlayMsg');
+    const recordingsList = document.getElementById('recordingsList');
+    
+    const resSelect = document.getElementById('resSelect');
+    
     applyResolution();
+    loadRecordings();
+    initResizeHandle();
+    loadResolution();
     }, []);
+
     return (
     <> 
 
@@ -224,8 +366,10 @@ function applyResolution() {
       Then click <strong>Record</strong> to start capturing
     </div>
   </div>
-  <button className="panel-toggle" id="panelToggle" onClick={toggleSidePanel} title="Toggle panel">&#9654;</button>
-  <div className="side-panel" id="sidePanel">
+  <button
+  style={{right: collapsed ? '0px' : sidePanelWidth + 'px'}}
+   className="panel-toggle" id="panelToggle" onClick={toggleSidePanel} title="Toggle panel">&#9654;</button>
+  <div className={`side-panel ${collapsed ? "collapsed" : ""}`} id="sidePanel">
     <div className="resize-handle" id="resizeHandle"></div>
     <div className="side-tabs">
       <button className="side-tab active" onClick={() => switchTab('list')}>Recordings</button>
@@ -233,12 +377,59 @@ function applyResolution() {
     </div>
     <div className="tab-content active" id="tabList">
       <div className="recordings-list" id="recordingsList">
-        <div className="empty">No recordings yet</div>
+        <div className="recordings-list">
+  {recordings.length === 0 ? (
+    <div className="empty">No recordings yet</div>
+  ) : (
+    recordings.map(v => {
+      const sel = selectedVideo === v.filename ? " selected" : "";
+
+      const statusCls =
+        v.status === "analyzing"
+          ? " analyzing"
+          : v.status === "ready"
+          ? " ready"
+          : v.status === "error"
+          ? " error"
+          : "";
+
+      let statusText = "New";
+      if (v.status === "analyzing") statusText = "⏳ Analyzing...";
+      else if (v.status === "ready")
+        statusText =
+          v.summary?.substring(0, 60) +
+          (v.summary?.length > 60 ? "..." : "") || "Ready";
+      else if (v.status === "error") statusText = "⚠ Error";
+
+      return (
+        <RecordItem
+          key={v.filename}
+          sel={sel}
+          v={v}
+          statusCls={statusCls}
+          statusText={statusText}
+          selectVideo={selectVideo}
+          deleteRecording={deleteRecording}
+          renameRecording={renameRecording}
+          stopPropagation={e => e.stopPropagation()}
+        />
+      );
+    })
+  )}
+</div>
       </div>
     </div>
     <div className="tab-content" id="tabDetail">
       <div id="detailContent">
-        <div className="no-selection">Click a recording to view details and chat</div>
+        {detailLoading ? (
+          <div className="no-selection">Loading...</div>
+        ) : detailError ? (
+          <div className="no-selection">Error: {detailError}</div>
+        ) : detailVideo ? (
+          <DetailItem video={detailVideo} />
+        ) : (
+          <div className="no-selection">Click a recording to view details and chat</div>
+        )}
       </div>
     </div>
   </div>
