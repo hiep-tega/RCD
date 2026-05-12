@@ -6,6 +6,7 @@ import DetailItem from "./DetailItem";
 const BASE_API = process.env.NEXT_PUBLIC_BASE_API || "/api";
 const DATA_JSON = process.env.DATA_JSON;
 const UPLOAD_DIR = process.env.UPLOAD_DIR;
+import JSONCapture from "../..//utils/JSONCapture";
 
 const PRESETS = [
   { name: 'Desktop',  width: 1200, height: 675, type: 'desktop' },
@@ -39,7 +40,70 @@ const RecordAnalyzer = () => {
       resSelect.appendChild(opt);
     });
   }
-  
+  const injectInterceptor = (iframe) => {
+  try {
+    const win = iframe.contentWindow;
+
+    if (!win) return;
+
+    console.log("Injecting interceptor...");
+
+    // ---------------- FETCH ----------------
+    const originalFetch = win.fetch;
+
+    win.fetch = async function (...args) {
+      const response = await originalFetch.apply(this, args);
+
+      try {
+        const clone = response.clone();
+
+        let body;
+
+        try {
+          body = await clone.json();
+        } catch {
+          body = await clone.text();
+        }
+
+        console.log("FETCH:", {
+          url: args[0],
+          response: body,
+        });
+      } catch (e) {
+        console.error(e);
+      }
+
+      return response;
+    };
+
+    // ---------------- XHR ----------------
+    const originalOpen = win.XMLHttpRequest.prototype.open;
+    const originalSend = win.XMLHttpRequest.prototype.send;
+
+    win.XMLHttpRequest.prototype.open = function (method, url) {
+      this._url = url;
+      this._method = method;
+
+      return originalOpen.apply(this, arguments);
+    };
+
+    win.XMLHttpRequest.prototype.send = function (body) {
+      this.addEventListener("load", function () {
+        console.log("XHR:", {
+          url: this._url,
+          response: this.responseText,
+        });
+      });
+
+      return originalSend.apply(this, arguments);
+    };
+
+    console.log("Interceptor installed inside iframe");
+  } catch (e) {
+    console.error("Cannot access iframe:", e);
+  }
+};
+
   const loadGame = () => {
     let url = document.getElementById('urlInput').value.trim();
     if (!url) return;
@@ -49,6 +113,7 @@ const RecordAnalyzer = () => {
     if (old) old.remove();
     placeholder.style.display = 'none';
     const iframe = document.createElement('iframe');
+    //
     iframe.id = 'gameIframe';
     iframe.src = url;
     iframe.style.width = '100%';
@@ -56,6 +121,7 @@ const RecordAnalyzer = () => {
     iframe.allow = 'display-capture; autoplay; fullscreen; microphone; camera';
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-top-navigation');
     gamePanel.appendChild(iframe);
+
     applyResolution();
     gameLoaded = true;
     recordBtn.disabled = false;
@@ -64,8 +130,8 @@ const RecordAnalyzer = () => {
       setStatus('Game loaded: ' + url + ' — Autopilot starting recording...');
       setTimeout(() => startRecording(), 500);
     }
-     
   }
+
   const toggleSettings = () => {
     const ov = document.getElementById('settingsOverlay');
     ov.classList.toggle('active');
