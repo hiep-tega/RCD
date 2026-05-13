@@ -17,7 +17,7 @@ function toWorkspacePath(envValue: string | undefined, fallback: string) {
 function resolveVideoPath(filename: string) {
   const fromEnv = toWorkspacePath(process.env.UPLOAD_DIR, "uploads");
   const fromUploads = path.join(process.cwd(), "uploads");
-  const fromPublicUploads = path.join(process.cwd(), "public", "uploads");
+  const fromPublicUploads = path.join(process.cwd(), "uploads");
 
   const candidates = [
     path.join(fromEnv, filename),
