@@ -1,8 +1,7 @@
-import { chromium, request } from "playwright";
 import fs from "fs-extra";
 import path from "path";
-import { test, expect } from "@playwright/test";
-
+import { test, chromium } from "@playwright/test";
+import API_Coordinate from "../utils/API_Coordination.json" assert { type: "json" };
 test.setTimeout(0);
 
 export const runtime = "nodejs";
@@ -11,18 +10,14 @@ const VIEWPORT = {
   width: 800,
   height: 600,
 };
-const spinButton = {
-  xRatio: 0.5,
-  yRatio: 0.5,
-  radius: 45,
-};
-let X=0;
-let Y=0;
 
-const OVERLAY_ID = "spin-overlay-btn";
 
-const GAME_URL =
-  "https://swiftplay.slotgen.com/uploads/games/en/caribbean_slot-1764907896/index.html?token=7648d0fc-2d87-4e84-800b-81381650f123";
+const ENTRY = API_Coordinate.data[1];
+const GAME_URL = ENTRY.API;
+let X = ENTRY.X;
+let Y = ENTRY.Y;
+let m = ENTRY.active_x??580; //x
+let n= ENTRY.active_y??400; //y
 
 let BASE_DURATION_MS = 0;
 const REEL_EXTENSION_MS = 2500;
@@ -49,6 +44,13 @@ function countWinningRounds(resultJson) {
   }
 }
 
+// const sessionHeaders = await page.evaluate(() => {
+//   return {
+//     "Content-Type": "application/json",
+//     Authorization: `Bearer 7648d0fc-2d87-4e84-800b-81381650f123}`, // Example
+//   };
+// });
+
 async function ensureSession() {
   if (browser && browser.isConnected() && context) {
     return;
@@ -64,6 +66,7 @@ async function ensureSession() {
 }
 
 test("Spin crawl", async () => {
+  
   if (running) {
     return Response.json(
       {
@@ -73,7 +76,7 @@ test("Spin crawl", async () => {
       { status: 409 },
     );
   }
-
+  
   try {
     running = true;
     const recordingsDir = path.join(process.cwd(), "recordings");
@@ -85,34 +88,31 @@ test("Spin crawl", async () => {
     await page.goto(GAME_URL, {
       waitUntil: "networkidle",
     });
-
-    //canvasloaier
-
-    await page.waitForSelector("canvas", {
-      timeout: 15000,
-    });
-
-    await page.evaluate(({ id }) => {
-      const old = document.getElementById(id);
-
-      if (old) {
-        old.remove();
-      }
-
-      window.__spinRequested = false;
-      window.__autoSpin = true;
-    }, { id: OVERLAY_ID });
-
     fs.writeFile("data/game_report.json", `${Date.now()}\n`);
 
+    await page.evaluate(() => {
+        window.addEventListener('mousedown', (e) => {
+          console.log('Mouse down at:', e.clientX, e.clientY);
+        });
+    });
     while (true) {
       if (BASE_DURATION_MS == 0) {
-        console.log("get in game");
         BASE_DURATION_MS = 3500;
         await page.waitForTimeout(1200);
+        console.log("get in game");
+        if(ENTRY.portrait){
+          await page.waitForTimeout(3000);
+        }
+
+        await page.locator('canvas').click({
+          position: { x: m, y: n },
+          force: true // Bypasses
+        });
         continue;
       } else {
         console.log("Waiting for spin...");
+        // start push button
+
 
         // start recording
         await page.evaluate(() => {
@@ -144,6 +144,12 @@ test("Spin crawl", async () => {
         //   (res) => res.request().method() === "POST",
         //   { timeout: 0 },
         // );
+        await page.waitForTimeout(1000);
+
+        await page.locator('canvas').click({
+          position: { x: X, y: Y },
+          force: true // Bypasses visibility checks if the button is strictly inside the canvas
+        });
 
         const responsePromise = page.waitForResponse(
           (res) =>
@@ -151,72 +157,17 @@ test("Spin crawl", async () => {
           { timeout: 0 },
         );
 
-        /// canvas overlay for auto spin
-
-        const canvas = page.locator("canvas");
-        const box = await canvas.boundingBox();
-
-        if (!box) {
-          throw new Error("Canvas not found");
-        }
-
-        const spinX = box.x + box.width ;
-        const spinY = box.y + box.height ;
-
-        await page.evaluate(
-          ({ id, radius, spinX, spinY }) => {
-            let btn = document.getElementById(id);
-
-            if (!btn) {
-              btn = document.createElement("button");
-              btn.id = id;
-              btn.textContent = "SPIN";
-              btn.style.position = "fixed";
-              btn.style.width = `${radius * 2}px`;
-              btn.style.height = `${radius}px`;
-              btn.style.border = "2px solid #fff";
-              btn.style.borderRadius = "50%";
-              btn.style.background = "rgba(220, 20, 60, 0.9)";
-              btn.style.color = "#fff";
-              btn.style.fontWeight = "700";
-              btn.style.fontSize = "14px";
-              btn.style.zIndex = "999999";
-              btn.style.cursor = "pointer";
-              btn.style.pointerEvents = "auto";
-              btn.style.boxShadow = "0 8px 20px rgba(0,0,0,0.45)";
-              btn.onclick = () => {
-                window.__spinRequested = true;
-              };
-
-              document.body.appendChild(btn);
-            }
-            X=120;
-            Y=100;
-            btn.style.right = `${X}px`;
-            btn.style.bottom = `${Y}px`;
-          },
-          {
-            id: OVERLAY_ID,
-            radius: spinButton.radius,
-            spinX,
-            spinY,
-          },
-        );
-
-        const shouldSpin = await page.evaluate(() => {
-          return !!(window.__autoSpin || window.__spinRequested);
-        });
-
-        if (!shouldSpin) {
-          await page.waitForTimeout(100);
-          continue;
-        }
-
-        await page.evaluate(() => {
-          window.__spinRequested = false;
-        });
-
-        await page.mouse.click(X, Y);
+        // const automacaRes = await page.request.post(`${GAME_URL}/v1`, {
+        //   headers: sessionHeaders,
+        //   data: {
+        //     action: "spin",
+        //     betLevel: 1,
+        //     betSize: 0.2,
+        //     game: "",
+        //   },
+        // });
+        // const result = await automacaRes.json();
+        // console.log("Automaca response:", result);
 
         // wait until POST actually happens
         const response = await responsePromise;
