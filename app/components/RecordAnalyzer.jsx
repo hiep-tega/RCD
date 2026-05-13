@@ -40,68 +40,17 @@ const RecordAnalyzer = () => {
       resSelect.appendChild(opt);
     });
   }
-  const injectInterceptor = (iframe) => {
-  try {
-    const win = iframe.contentWindow;
 
-    if (!win) return;
+  const startCrawler = async () => {
+  const url = document.getElementById('urlInput').value;
 
-    console.log("Injecting interceptor...");
-
-    // ---------------- FETCH ----------------
-    const originalFetch = win.fetch;
-
-    win.fetch = async function (...args) {
-      const response = await originalFetch.apply(this, args);
-
-      try {
-        const clone = response.clone();
-
-        let body;
-
-        try {
-          body = await clone.json();
-        } catch {
-          body = await clone.text();
-        }
-
-        console.log("FETCH:", {
-          url: args[0],
-          response: body,
-        });
-      } catch (e) {
-        console.error(e);
-      }
-
-      return response;
-    };
-
-    // ---------------- XHR ----------------
-    const originalOpen = win.XMLHttpRequest.prototype.open;
-    const originalSend = win.XMLHttpRequest.prototype.send;
-
-    win.XMLHttpRequest.prototype.open = function (method, url) {
-      this._url = url;
-      this._method = method;
-
-      return originalOpen.apply(this, arguments);
-    };
-
-    win.XMLHttpRequest.prototype.send = function (body) {
-      this.addEventListener("load", function () {
-        console.log("XHR:", {
-          url: this._url,
-          response: this.responseText,
-        });
-      });
-
-      return originalSend.apply(this, arguments);
-    };
-
-    console.log("Interceptor installed inside iframe");
-  } catch (e) {
-    console.error("Cannot access iframe:", e);
-  }
+  await fetch('/api/crawl/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ url }),
+  });
 };
 
   const loadGame = () => {
@@ -121,6 +70,9 @@ const RecordAnalyzer = () => {
     iframe.allow = 'display-capture; autoplay; fullscreen; microphone; camera';
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-top-navigation');
     gamePanel.appendChild(iframe);
+
+    /// decompostite
+    //startCrawler();
 
     applyResolution();
     gameLoaded = true;
