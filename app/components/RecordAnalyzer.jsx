@@ -7,6 +7,7 @@ import "../utils/save_reponse_v1";
 const BASE_API = process.env.NEXT_PUBLIC_BASE_API || "/api";
 const DATA_JSON = process.env.DATA_JSON;
 const UPLOAD_DIR = process.env.UPLOAD_DIR;
+import JSONCapture from "../..//utils/JSONCapture";
 
 const PRESETS = [
   { name: 'Desktop',  width: 1200, height: 675, type: 'desktop' },
@@ -42,6 +43,17 @@ const RecordAnalyzer = () => {
     });
   }
 
+  const startCrawler = async () => {
+  const url = document.getElementById('urlInput').value;
+
+  await fetch('/api/crawl/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ url }),
+  });
+};
 
   const loadGame = () => {
     let url = document.getElementById('urlInput').value.trim();
@@ -52,6 +64,7 @@ const RecordAnalyzer = () => {
     if (old) old.remove();
     placeholder.style.display = 'none';
     const iframe = document.createElement('iframe');
+    //
     iframe.id = 'gameIframe';
     iframe.src = url;
     iframe.style.width = '100%';
@@ -59,6 +72,10 @@ const RecordAnalyzer = () => {
     iframe.allow = 'display-capture; autoplay; fullscreen; microphone; camera';
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-top-navigation');
     gamePanel.appendChild(iframe);
+
+    /// decompostite
+    //startCrawler();
+
     applyResolution();
     gameLoaded = true;
     recordBtn.disabled = false;
@@ -68,6 +85,7 @@ const RecordAnalyzer = () => {
       setTimeout(() => startRecording(), 500);
     }
   }
+
   const toggleSettings = () => {
     const ov = document.getElementById('settingsOverlay');
     ov.classList.toggle('active');
