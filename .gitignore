@@ -2,6 +2,8 @@
 
 /uploads
 /recordings
+/data/*
+!/data/coordinate.json
 
 # dependencies
 /node_modules

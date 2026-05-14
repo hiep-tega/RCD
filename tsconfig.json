@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "app/components/RecordItem.jsx", "app/api/crawl/route.js", "tests/example.spec.js"  ],
+, "app/components/RecordItem.jsx", "app/api/crawl/route.js", "tests/crawl.spec.js"  ],
   "exclude": ["node_modules"]
 }

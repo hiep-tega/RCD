@@ -52,9 +52,20 @@
       "active_y": 180
     },
     {
-      "API": "",
-      "X": 600,
-      "Y": 420
+      "API": "https://swiftplay.slotgen.com/uploads/games/en/fortune_mouse-1759994813/index.html?token=7d472c4d-539a-4fb0-83aa-af8f1a5594ab",
+      "X": 200,
+      "Y": 620,
+      "active_x": 193,
+      "active_y": 552,
+      "portrait": true
+    },
+    {
+      "API": "https://swiftplay.slotgen.com/uploads/games/en/fortune_rabbit-1759994818/index.html?token=ff8eccd1-5166-4471-82a5-2d41d136c898",
+      "X": 200,
+      "Y": 620,
+      "active_x": 193,
+      "active_y": 552,
+      "portrait": true
     },
     {
       "API": "",

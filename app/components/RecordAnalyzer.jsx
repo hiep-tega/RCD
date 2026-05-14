@@ -2,12 +2,10 @@
 import {useCallback, useEffect, useState } from "react";
 import RecordItem from "./RecordItem";
 import DetailItem from "./DetailItem";
-import "../utils/save_reponse_v1";
 
 const BASE_API = process.env.NEXT_PUBLIC_BASE_API || "/api";
 const DATA_JSON = process.env.DATA_JSON;
 const UPLOAD_DIR = process.env.UPLOAD_DIR;
-import JSONCapture from "../..//utils/JSONCapture";
 
 const PRESETS = [
   { name: 'Desktop',  width: 1200, height: 675, type: 'desktop' },

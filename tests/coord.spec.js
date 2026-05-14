@@ -1,0 +1,268 @@
+import fs from "fs-extra";
+import path from "path";
+import { test, chromium } from "@playwright/test";
+test.setTimeout(0);
+
+let browser = null;
+let context = null;
+let running = false;
+let ANOTHER_VIEWPORT = null;
+let x, y;
+
+////
+const COORDINATE_PATH = path.join(process.cwd(), "data", "correct_cod.json");
+
+async function appendCoordinate(url, x_activate, y_activate, x_play, y_play, displayMode) {
+  await fs.ensureDir(path.dirname(COORDINATE_PATH));
+
+  let coordinates = [];
+
+  if (await fs.pathExists(COORDINATE_PATH)) {
+    try {
+      const raw = await fs.readFile(COORDINATE_PATH, "utf8");
+
+      if (raw.trim()) {
+        coordinates = JSON.parse(raw);
+
+        if (!Array.isArray(coordinates)) {
+          coordinates = [];
+        }
+      }
+    } catch (e) {
+      console.warn("coordinate.json invalid, recreating.");
+    }
+  }
+
+  coordinates.push({
+    url,
+    x_activate,
+    y_activate,
+    x_play,
+    y_play,
+    ts: new Date().toISOString(),
+  });
+
+  await fs.writeJson(COORDINATE_PATH, coordinates, {
+    spaces: 2,
+  });
+
+  console.log("Coordinate saved");
+}
+
+//frmae session\
+async function anotherSession(displayMode) {
+  if (browser && browser.isConnected() && context) {
+    return;
+  }
+
+  browser = await chromium.launch({
+    headless: false,
+  });
+
+  if (displayMode === "portrait") {
+    ANOTHER_VIEWPORT = {
+      width: 396,
+      height: 703,
+    };
+  } else {
+    ANOTHER_VIEWPORT = {
+      width: 800,
+      height: 600,
+    };
+  }
+  context = await browser.newContext({
+    viewport: ANOTHER_VIEWPORT,
+  });
+}
+
+test("Get the coordinate", async () => {
+  const API_PORTRAIT = [
+    "https://swiftplay.slotgen.com/uploads/games/en/fortune_mouse-1759994813/index.html?token=7d472c4d-539a-4fb0-83aa-af8f1a5594ab",
+    "https://swiftplay.slotgen.com/uploads/games/en/fortune_rabbit-1759994818/index.html?token=ff8eccd1-5166-4471-82a5-2d41d136c898",
+    "https://swiftplay.slotgen.com/uploads/games/en/fortune_ox-1759994824/index.html?token=dcc32a5b-3bae-4ecf-a2e9-72e6126202bd",
+    "https://swiftplay.slotgen.com/uploads/games/en/fortune_tiger-1759994939/index.html?token=0607ec66-8bc3-4ee0-8420-abcd7b533956",
+    "https://swiftplay.slotgen.com/uploads/games/en/fortune_dragon-1759994810/index.html?token=c58b594c-290e-4fff-9a5e-f19cbd19aa3e",
+    "https://swiftplay.slotgen.com/uploads/games/en/piggy_gold-1763368250/index.html?token=73483cf6-e7f0-4b8a-864a-65ac2de60583",
+    "https://swiftplay.slotgen.com/uploads/games/en/phoenix_rises-1768555190/index.html?token=68307dee-bdc1-4561-80d6-d210ef3034f4",
+    "https://swiftplay.slotgen.com/uploads/games/en/queen_of_bounty-1759995106/index.html?token=a9601c38-e18d-4c64-afff-40058bd3ac61",
+    "https://swiftplay.slotgen.com/uploads/games/en/aztec-1768899182/index.html?token=9608d294-8388-4b00-9d38-f4484ddfd93c",
+    "https://swiftplay.slotgen.com/uploads/games/en/legend_of_hou_yi-1768555133/index.html?token=86311391-5940-48db-8042-7388e637eec4",
+    "https://swiftplay.slotgen.com/uploads/games/en/cruise_royale-1765764913/index.html?token=73cc5363-f06b-4042-9d18-d7892e17ca7a",
+    "https://swiftplay.slotgen.com/uploads/games/en/songkan_flash-1759995117/index.html?token=f2c70314-2e0d-474f-808e-1984c66a812d",
+    "https://swiftplay.slotgen.com/uploads/games/en/mahjong_ways-1759995078/index.html?token=cd792716-a956-49cb-b244-b81a0fdddf0e",
+    "https://swiftplay.slotgen.com/uploads/games/en/mystical_spirits-1759995087/index.html?token=e589bcc1-b00c-4a47-8839-45bc037ceda3",
+    "https://swiftplay.slotgen.com/uploads/games/en/captains_bounty-1768899216/index.html?token=4e766d9f-4c88-400b-ada5-192b93de5f2e",
+    "https://swiftplay.slotgen.com/uploads/games/en/dragon_stones-1768899213/index.html?token=25fd6c54-6e56-4ed6-b07b-ceddd52ea2eb",
+    "https://swiftplay.slotgen.com/uploads/games/en/astro-1739167927/index.html?token=f06136bc-b5d8-4568-8fce-150372453d92",
+    "https://swiftplay.slotgen.com/uploads/games/en/bali_vacation-1768554969/index.html?token=a96c6279-ab05-4ab6-aca9-db054c059a75",
+    "https://swiftplay.slotgen.com/uploads/games/en/fortune_cat-1734082151/index.html?token=004f4add-0723-4ec9-9d60-7c61d4ee2ff0",
+    "https://swiftplay.slotgen.com/uploads/games/en/fortune_panda-1734082175/index.html?token=77bba2de-90f4-4d3a-aef5-a54d56e12fd5",
+    "https://swiftplay.slotgen.com/uploads/games/en/viking-1768899191/index.html?token=bc0019db-a0f2-4c53-9584-0ac1f67f7212",
+    "https://swiftplay.slotgen.com/uploads/games/en/mahjong_ways_2-1769075361/index.html?token=056c6274-4809-43a3-9028-5e322cde8b53",
+    "https://swiftplay.slotgen.com/uploads/games/en/muay_thai-1768555163/index.html?token=f7e21ce1-87f5-4b59-aa06-20f42123cef0",
+    "https://swiftplay.slotgen.com/uploads/games/en/wild_bandito-1764641699/index.html?token=23ed8aa6-4498-4aee-8212-768b317655e5",
+    "https://swiftplay.slotgen.com/uploads/games/en/galactic_gems-1764655545/index.html?token=ced0222a-9050-4d96-8a97-af4b89f8aa3c",
+    "https://swiftplay.slotgen.com/uploads/games/en/winter_princess-1734082229/index.html?token=ff427c1a-31d5-484f-ad89-c0a57920d067",
+    "https://swiftplay.slotgen.com/uploads/games/en/secrets_of_cleopatra-1764742974/index.html?token=e0473af9-e871-49bb-b58d-f0aec04a328f",
+    "https://swiftplay.slotgen.com/uploads/games/en/santa_christmas-1735202793/index.html?token=b93b7e6e-4027-4f3e-931d-1b58339084ec",
+    "https://swiftplay.slotgen.com/uploads/games/en/lucky_tiger-1735098526/index.html?token=8245a1d9-1691-4b04-af33-1ed5d5198ed1",
+    "https://swiftplay.slotgen.com/uploads/games/en/lucky_mouse-1735098099/index.html?token=4712b904-264b-4db7-8072-ab3d266b6303",
+    "https://swiftplay.slotgen.com/uploads/games/en/vampire_charm-1768963181/index.html?token=6cdad464-1723-4b58-b4c8-0d50a4891855",
+    "https://swiftplay.slotgen.com/uploads/games/en/jujutsuspinning-1768555110/index.html?token=da99c055-2ddb-4b7a-8038-625a2a6d210b",
+    "https://swiftplay.slotgen.com/uploads/games/en/wuxia_dragon-1768555215/index.html?token=986c808f-9f5e-4400-9782-d0f6e631d70f",
+    "https://swiftplay.slotgen.com/uploads/games/en/dragon_academy-1762414725/index.html?token=f314804f-1278-4101-9d6f-fa095ad7b68a",
+    "https://swiftplay.slotgen.com/uploads/games/en/academy_magic-1768899210/index.html?token=2c326b2a-9050-416f-8c2a-eeba52f615cc",
+    "https://swiftplay.slotgen.com/uploads/games/en/infinite_fighting-1768556028/index.html?token=94ecf7ac-7813-4e34-be95-5ce99ddc541f",
+    "https://swiftplay.slotgen.com/uploads/games/en/blood_bride-1758870555/index.html?token=df3c6421-5445-4c78-a515-7c4f0e1b0135",
+    "https://swiftplay.slotgen.com/uploads/games/en/hunter_awaken-1763368339/index.html?token=85c84a30-3051-4801-90b5-6845a8b0aef1",
+    "https://swiftplay.slotgen.com/uploads/games/en/croco_bath_water-1768963171/index.html?token=ff081801-70d4-4261-9602-d46030f3fbc5",
+    "https://swiftplay.slotgen.com/uploads/games/en/mecha_prime-1768203691/index.html?token=b9cee350-5fe1-4892-8173-4fbca15b19c7",
+    "https://swiftplay.slotgen.com/uploads/games/en/mine_stone-1769500544/index.html?token=323395d0-353e-4035-8d13-de6809064a36",
+  ];
+
+  const API_LANDSCAPE = [
+    "https://swiftplay.slotgen.com/uploads/games/en/caribbean_slot-1764907896/index.html?token=7648d0fc-2d87-4e84-800b-81381650f123",
+    "https://swiftplay.slotgen.com/uploads/games/en/slot_adventurer-1734079639/index.html?token=c5415125-5cca-491b-bacc-e0d2e140c241",
+    "https://swiftplay.slotgen.com/uploads/games/en/mine_slot-1764907921/index.html?token=555593e2-210e-4851-9231-f8734378a9df",
+    "https://swiftplay.slotgen.com/uploads/games/en/farm_slot-1734079537/index.html?token=df12fa16-5724-4010-a321-886cb428953d",
+    "https://swiftplay.slotgen.com/uploads/games/en/halloween_pumpkin-1734079613/index.html?token=46318b6e-b920-49fb-a61a-2e75c88a35d7",
+    "https://swiftplay.slotgen.com/uploads/games/en/slot_christmas-1734079667/index.html?token=1ab4df29-e654-4b7d-8b81-399b4d194f5d",
+    "https://swiftplay.slotgen.com/uploads/games/en/gems_slot-1734081720/index.html?token=fbda6ae5-b911-4383-800a-4ceaa5dac5e9",
+    "https://swiftplay.slotgen.com/uploads/games/en/monster_slot-1734081762/index.html?token=0efa18b9-cc93-476d-b874-dae9d06a30a7",
+    "https://swiftplay.slotgen.com/uploads/games/en/flowers_slot-1734081746/index.html?token=bc633253-ee74-45f6-81eb-ee126c116c8f",
+    "https://swiftplay.slotgen.com/uploads/games/en/pan_slot-1734081791/index.html?token=33bf2d0e-6142-46f5-96ba-d269c28e3c05",
+    "https://swiftplay.slotgen.com/uploads/games/en/egypt_slot-1734081693/index.html?token=cbb2fcfa-9382-4ef0-8c81-4290be4edf1d",
+    "https://swiftplay.slotgen.com/uploads/games/en/big_win_poker-1734082109/index.html?token=22a9d7f1-d8d5-4109-b805-018b24543a32",
+    "https://swiftplay.slotgen.com/uploads/games/en/starlight_princess-1734082130/index.html?token=149e6f9a-d620-44d4-be6b-38ba48d9f250",
+    "https://swiftplay.slotgen.com/uploads/games/en/big_bass_bonanza-1760591054/index.html?token=6afbf284-22f7-4593-b719-fb440a389b26",
+    "https://swiftplay.slotgen.com/uploads/games/en/godzilla_rampage-1736223611/index.html?token=640ab937-072d-4d24-975e-0e3d8fd1dab7",
+    "https://swiftplay.slotgen.com/uploads/games/en/sugar_rush-1764138633/index.html?token=68c25bf5-2fc5-42cf-ac88-4102b13932a0",
+    "https://swiftplay.slotgen.com/uploads/games/en/sweet_bonanza_super_scatter-1761291095/index.html?token=9129b6c8-74bc-4cd7-9d3b-3cfaaa6e4cc9",
+    "https://swiftplay.slotgen.com/uploads/games/en/ciinder_bonanza-1767348138/index.html?token=b512e1c3-82c8-4279-95e1-a839deaa0090",
+    "https://swiftplay.slotgen.com/uploads/games/en/leprechaun_riches-1741674136/index.html?token=f7a6ce63-6e8e-4c5e-ae3e-c8947be859ce",
+    "https://swiftplay.slotgen.com/uploads/games/en/gates_of_olympus-1760342053/index.html?token=06100da9-7fbf-4043-9267-766e8b7772e5",
+    "https://swiftplay.slotgen.com/uploads/games/en/the_ring-1734079670/index.html?token=10ecfc08-e7c5-4601-ac64-5082633ba44d",
+    "https://swiftplay.slotgen.com/uploads/games/en/sweet_bonanza-1734080023/index.html?token=e1f13f2b-6924-4881-9cfe-f20d67c38637",
+    "https://swiftplay.slotgen.com/uploads/games/en/the_blade_of_time-1768449467/index.html?token=0b04f5e1-642d-44a8-8e20-9b3c860c4f2b",
+  ];
+
+  for (let i = 3; i < API_PORTRAIT.length; i++) {
+    try {
+      await anotherSession("portrait");
+
+      const page = await context.newPage();
+
+      let firstClick = null;
+
+      await page.exposeFunction("saveClick", async ({ x, y }) => {
+        console.log("Clicked:", x, y);
+
+        if (!firstClick) {
+          firstClick = { x, y };
+
+          console.log("Saved activate position");
+
+          return;
+        }
+
+        await appendCoordinate(
+          API_PORTRAIT[i],
+          firstClick.x,
+          firstClick.y,
+          x,
+          y,
+          "portrait"
+        );
+
+        console.log("Saved play position");
+
+        firstClick = null;
+      });
+
+      await page.addInitScript(() => {
+        document.addEventListener("click", (event) => {
+          window.saveClick({
+            x: event.clientX,
+            y: event.clientY,
+          });
+        });
+      });
+
+      await page.goto(API_PORTRAIT[i], {
+        waitUntil: "networkidle",
+      });
+
+      console.log("Opened:", API_PORTRAIT[i]);
+
+      await page.waitForTimeout(10000);
+
+      await context.close();
+      await browser.close();
+
+      browser = null;
+      context = null;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  for (let i = 0; i < API_LANDSCAPE.length; i++) {
+    try {
+      await anotherSession("landscape");
+
+      const page = await context.newPage();
+
+      let firstClick = null;
+
+      await page.exposeFunction("saveClick", async ({ x, y }) => {
+        console.log("Clicked:", x, y);
+
+        if (!firstClick) {
+          firstClick = { x, y };
+
+          console.log("Saved activate position");
+
+          return;
+        }
+
+        await appendCoordinate(
+          API_LANDSCAPE[i],
+          firstClick.x,
+          firstClick.y,
+          x,
+          y,
+          "landscape"
+        );
+
+        console.log("Saved play position");
+
+        firstClick = null;
+      });
+
+      await page.addInitScript(() => {
+        document.addEventListener("click", (event) => {
+          window.saveClick({
+            x: event.clientX,
+            y: event.clientY,
+          });
+        });
+      });
+
+      await page.goto(API_LANDSCAPE[i], {
+        waitUntil: "networkidle",
+      });
+
+      console.log("Opened:", API_LANDSCAPE[i]);
+
+      await page.waitForTimeout(10000);
+
+      await context.close();
+      await browser.close();
+
+      browser = null;
+      context = null;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+});

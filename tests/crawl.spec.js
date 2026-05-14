@@ -1,26 +1,64 @@
 import fs from "fs-extra";
 import path from "path";
 import { test, chromium } from "@playwright/test";
-import API_Coordinate from "../utils/API_Coordination.json" assert { type: "json" };
+import API_Coordination from "../utils/API_Coordination.json" assert { type: "json" };
+import DisplaySetting from "../utils/DisplayCoordination.json" assert { type: "json" };
+import Coordinate from "../data/coordinate.json" assert { type: "json" };
 test.setTimeout(0);
 
 export const runtime = "nodejs";
 
-const VIEWPORT = {
-  width: 800,
-  height: 600,
-};
+const GAME_URL = DisplaySetting.landscape.API[1];
 
+function getGameEntry(settings, gameUrl) {
+  for (const displayMode of ["portrait", "landscape"]) {
+    const mode = settings[displayMode];
 
-const ENTRY = API_Coordinate.data[1];
-const GAME_URL = ENTRY.API;
-let X = ENTRY.X;
-let Y = ENTRY.Y;
-let m = ENTRY.active_x??580; //x
-let n= ENTRY.active_y??400; //y
+    for (const item of mode.API) {
+      if (typeof item === "string") {
+        if (item === gameUrl) {
+          return {
+            displayMode, // save current mode name
+            ...mode,
+          };
+        }
+      } else if (typeof item === "object") {
+        const url = Object.keys(item)[0];
+
+        if (url === gameUrl) {
+          return {
+            displayMode,
+            ...mode,
+            ...item[url],
+          };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+const ENTRY = getGameEntry(DisplaySetting, GAME_URL);
+
+const X = ENTRY.X;
+const Y = ENTRY.Y;
+
+const m = ENTRY.active_x ?? 580;
+const n = ENTRY.active_y ?? 400;
+
+let VIEWPORT = ENTRY.portrait
+  ? {
+      width: 396,
+      height: 703,
+    }
+  : {
+      width: 800,
+      height: 600,
+    };
 
 let BASE_DURATION_MS = 0;
 const REEL_EXTENSION_MS = 2500;
+const PULL_COMP_MS = 1200;
 
 let browser = null;
 let context = null;
@@ -44,13 +82,6 @@ function countWinningRounds(resultJson) {
   }
 }
 
-// const sessionHeaders = await page.evaluate(() => {
-//   return {
-//     "Content-Type": "application/json",
-//     Authorization: `Bearer 7648d0fc-2d87-4e84-800b-81381650f123}`, // Example
-//   };
-// });
-
 async function ensureSession() {
   if (browser && browser.isConnected() && context) {
     return;
@@ -60,13 +91,18 @@ async function ensureSession() {
     headless: false,
   });
 
+  if (ENTRY.portrait) {
+    VIEWPORT = {
+      width: 396,
+      height: 703,
+    };
+  }
   context = await browser.newContext({
     viewport: VIEWPORT,
   });
 }
 
 test("Spin crawl", async () => {
-  
   if (running) {
     return Response.json(
       {
@@ -76,7 +112,7 @@ test("Spin crawl", async () => {
       { status: 409 },
     );
   }
-  
+
   try {
     running = true;
     const recordingsDir = path.join(process.cwd(), "recordings");
@@ -88,86 +124,85 @@ test("Spin crawl", async () => {
     await page.goto(GAME_URL, {
       waitUntil: "networkidle",
     });
+
+    // // Debug: Draw active area
+    // const activatePortraitArea = {
+    //   x: 180,
+    //   y: 600,
+    //   width: 40,
+    //   height: 80,
+    // };
+    // await page.evaluate((a) => {
+    //   const div = document.createElement("div");
+    //   div.style.position = "fixed";
+    //   div.style.left = a.x + "px";
+    //   div.style.top = a.y + "px";
+    //   div.style.width = a.width + "px";
+    //   div.style.height = a.height + "px";
+    //   div.style.border = "2px solid red";
+    //   div.style.zIndex = "999999";
+    //   document.body.appendChild(div);
+    // }, activatePortraitArea);
+
     fs.writeFile("data/game_report.json", `${Date.now()}\n`);
 
-    await page.evaluate(() => {
-        window.addEventListener('mousedown', (e) => {
-          console.log('Mouse down at:', e.clientX, e.clientY);
-        });
-    });
     while (true) {
       if (BASE_DURATION_MS == 0) {
         BASE_DURATION_MS = 3500;
-        await page.waitForTimeout(1200);
+        await page.waitForTimeout(1000);
         console.log("get in game");
-        if(ENTRY.portrait){
+        if (ENTRY.portrait) {
           await page.waitForTimeout(3000);
+          BASE_DURATION_MS = 2000;
         }
 
-        await page.locator('canvas').click({
+        await page.locator("canvas").click({
           position: { x: m, y: n },
-          force: true // Bypasses
+          force: true, // Bypasses
         });
-        continue;
+
+        await page.waitForTimeout(2000);
       } else {
         console.log("Waiting for spin...");
-        // start push button
-
-
+        
         // start recording
         await page.evaluate(() => {
           const canvas = document.querySelector("canvas");
-
+          
           if (!canvas) {
             throw new Error("Canvas not found");
           }
-
+          
           const stream = canvas.captureStream(60);
-
+          
           window.recordedChunks = [];
-
+          
           window.mediaRecorder = new MediaRecorder(stream, {
             mimeType: "video/webm;codecs=vp9",
           });
-
+          
           mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) {
               recordedChunks.push(e.data);
             }
           };
-
+          
           mediaRecorder.start();
         });
-
-        // // wait for POST generated by manual click
-        // const responsePromise = page.waitForResponse(
-        //   (res) => res.request().method() === "POST",
-        //   { timeout: 0 },
-        // );
+        
         await page.waitForTimeout(1000);
-
-        await page.locator('canvas').click({
+        
+        // start push button
+        await page.locator("canvas").click({
           position: { x: X, y: Y },
-          force: true // Bypasses visibility checks if the button is strictly inside the canvas
+          force: true, // Bypasses visibility checks if the button is strictly inside the canvas
         });
-
+        
         const responsePromise = page.waitForResponse(
           (res) =>
             res.request().method() === "POST" && res.url().includes("/v1"),
           { timeout: 0 },
         );
-
-        // const automacaRes = await page.request.post(`${GAME_URL}/v1`, {
-        //   headers: sessionHeaders,
-        //   data: {
-        //     action: "spin",
-        //     betLevel: 1,
-        //     betSize: 0.2,
-        //     game: "",
-        //   },
-        // });
-        // const result = await automacaRes.json();
-        // console.log("Automaca response:", result);
 
         // wait until POST actually happens
         const response = await responsePromise;
@@ -187,6 +222,7 @@ test("Spin crawl", async () => {
         }
 
         if (body) {
+          // landscape games usually have win_amount in the root, while portrait games might nest it differently
           const winAmount = parseFloat(body.data["win_amount"] ?? 0);
 
           if (!Number.isNaN(winAmount) && winAmount > 0) {
@@ -194,12 +230,16 @@ test("Spin crawl", async () => {
 
             extraMs = winningRounds * REEL_EXTENSION_MS;
           }
-        }
 
-        fs.appendFile("data/game_report.json", `${JSON.stringify(body)},\n`);
-
-        if (extraMs > 0) {
-          await page.waitForTimeout(extraMs);
+          // portrait games might have a different structure, so we can check for nested win_amount if the root one is not present
+          if (ENTRY.displayMode === "portrait") {
+            let pull = body.data.pull?.ActiveLines?.length;
+            if (pull) {
+              extraMs = pull * PULL_COMP_MS;
+            }
+          }
+          await waitForTimeout(extraMs);
+          await fs.appendFile("data/game_report.json", JSON.stringify(body));
         }
 
         const base64Video = await page.evaluate(async () => {
@@ -221,7 +261,6 @@ test("Spin crawl", async () => {
 
               resolve(btoa(binary));
             };
-
             mediaRecorder.stop();
           });
         });
@@ -233,9 +272,20 @@ test("Spin crawl", async () => {
         const fullPath = path.resolve(process.cwd(), "recordings", filename);
 
         await fs.writeFile(fullPath, buffer);
+        
         console.log("Saved:", filename);
+
+        //get out of pannel show paly win how many from free spin
+        if (body.data.freespin_win !== "0.00") {
+          page.evaluate(() => {
+            window.addEventListener("mousedown", (e) => {
+              console.log("Mouse down at:", 10, 10);
+            });
+          });
+        }
       }
     }
+    await page.waitForTimeout(10000);
   } catch (e) {
     console.error(e);
 
@@ -248,5 +298,7 @@ test("Spin crawl", async () => {
     );
   } finally {
     running = false;
+    await context?.close();
+    await browser?.close();
   }
 });

@@ -2,6 +2,10 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   use: {
+    // viewport:{
+    //   width: 800,
+    //   height: 600,
+    // },
     video: {
       mode: 'on',
       size: {
